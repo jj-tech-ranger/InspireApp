@@ -6,66 +6,103 @@ import com.inspirewear.android.data.customer.Customer
 import com.inspirewear.android.data.customer.CustomerRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class CustomerViewModel : ViewModel() {
 
     private val repository = CustomerRepository()
 
-    private var originalCustomers = listOf<Customer>()
     private val _customers = MutableStateFlow<List<Customer>>(emptyList())
-    val customers: StateFlow<List<Customer>> = _customers
+    val customers: StateFlow<List<Customer>> = _customers.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     private val _selectedCustomer = MutableStateFlow<Customer?>(null)
-    val selectedCustomer: StateFlow<Customer?> = _selectedCustomer
+    val selectedCustomer: StateFlow<Customer?> = _selectedCustomer.asStateFlow()
 
     fun getCustomers() {
         viewModelScope.launch {
-            originalCustomers = repository.getCustomers()
-            _customers.value = originalCustomers
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                val result = repository.getCustomers()
+                _customers.value = result
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to load customers: ${e.message}"
+                _customers.value = emptyList()
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    fun getCustomerById(id: Long) {
+    fun getCustomerById(id: Int) {
         viewModelScope.launch {
-            _selectedCustomer.value = originalCustomers.find { it.id == id }
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                val result = repository.getCustomerById(id)
+                _selectedCustomer.value = result
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to load customer: ${e.message}"
+                _selectedCustomer.value = null
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    fun addCustomer(customer: Customer) {
+    fun createCustomer(customer: Customer) {
         viewModelScope.launch {
-            repository.addCustomer(customer)
-            getCustomers()
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                repository.createCustomer(customer)
+                getCustomers() // Refresh list
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to create customer: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    fun updateCustomer(id: Long, customer: Customer) {
+    fun updateCustomer(customer: Customer) {
         viewModelScope.launch {
-            repository.updateCustomer(id, customer)
-            getCustomers()
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                repository.updateCustomer(customer)
+                getCustomers() // Refresh list
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to update customer: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    fun deleteCustomer(id: Long) {
+    fun deleteCustomer(id: Int) {
         viewModelScope.launch {
-            repository.deleteCustomer(id)
-            getCustomers()
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                repository.deleteCustomer(id)
+                getCustomers() // Refresh list
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to delete customer: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    fun filterCustomers(query: String) {
-        _customers.value = if (query.isEmpty()) {
-            originalCustomers
-        } else {
-            originalCustomers.filter { "${it.first_name} ${it.last_name}".contains(query, ignoreCase = true) }
-        }
-    }
-
-    fun sortCustomers(sortOption: String) {
-        _customers.value = when (sortOption) {
-            "Name" -> _customers.value.sortedBy { it.first_name }
-            "Location" -> _customers.value.sortedBy { it.location }
-            else -> _customers.value
-        }
+    fun clearError() {
+        _errorMessage.value = null
     }
 }
